@@ -16,7 +16,7 @@
 //Nome unico do algoritmo. Deve ter 4 caracteres.
 const char lottName[]="LOTT";
 int total_tickets = 0;
-int slot = -1; //slot para este caso será sempre zero
+int slot = -1;
 //=====Funcoes Auxiliares=====
 
 
@@ -53,38 +53,35 @@ void lottInitSchedParams(Process *p, void *params) {
 
     //Associa um processo a um algoritmo de escalonamento especifico
     schedSetScheduler(p, params,slot);
-
-    LotterySchedParams *lotter;
-	lotter = processGetSchedParams(p);
 }
 
 //Recebe a notificação de que um processo sob gerência de Lottery mudou de estado
 //Deve realizar qualquer atualização de dados da Loteria necessária quando um processo muda de estado
 void lottNotifyProcStatusChange(Process* p) {
-	// A schedNotifyProcStatusChange(p) recebe uma notificação de que o estatus do processo p foi modificado e ela chama a função
-	// lottNotifyProcStatusChange para modificar os dados da dados necessarios quando o estado muda
-
     //pega o status do processo p
     int status = processGetStatus(p);
 
-    //pega os parametros do lottery_params
+    //Pega os parametros do lottery_params
     LotterySchedParams *lotter;
-    //Atualiza o estatus do processo dentro do lottery
     lotter = processGetSchedParams(p);
-    //STAT:(status)	0: processo inicializado
-	//			2: processo bloqueado
-	//			4: processo pronto
-	//			8: processo em execução
-	//			16:processo finalizado
 
+    //STAT:(status)	0: processo inicializado
+	//			    2: processo bloqueado
+	//			    4: processo pronto
+	//			    8: processo em execução
+	//			    16:processo finalizado
+
+	//se um processo é inicializado, ele entra em pronto e é necessário adicionar o seu número de tikets ao total
 	//se o processo sai de bloqueado para pronto ou de em execução para pronto, é necessário adicionar o seu número de tikets ao total
     if (status == 0 || status == 4){
-        total_tickets += lotter->num_tickets;
+        total_tickets = total_tickets + lotter->num_tickets;
     }
 
-    // se o processo é bloqueado, em execução ou finalizado, é necessario retirar o seu número de tikets do total
-    if (status == 2 || status == 8 || status == 16) //PROBLEMAAAAAAA(acho que tem problema no plist)
+    // se o processo vai para em execução ou finalizado, é necessario retirar o seu número de tikets do total
+    if ( status == 8 || status == 16){
         total_tickets = total_tickets - lotter->num_tickets;
+    }
+    //se o processo é bloqueado, é porque ele estava em execução, por tanto não é alterado o número total de tickets dos processos prontos
 
 }
 
@@ -92,29 +89,31 @@ void lottNotifyProcStatusChange(Process* p) {
 Process* lottSchedule(Process *plist) {
     //Criando um novo processo para receber o processo sorteado
 	Process *proximo = NULL;
-	//criando uma variavel auxiliar para sortear um número entre 1 e 1000
-	unsigned int ticket_premiado;
-	ticket_premiado = (rand()%total_tickets);
 
+	unsigned int ticket_premiado;
+	//sorteia um número entre 0 e total de tickets dos processos prontos
+	ticket_premiado = (rand()%total_tickets);
 
 	LotterySchedParams *lotter;
 	int maximo = 0;
 	int minimo = 0;
 	Process *aux;
+	//percorre a lista de totos os processos
     for (aux = plist; aux != NULL; aux = processGetNext(aux))
 	{
+	    //se o processo tiver pronto, é avaliado se ele está com o ticket premiado
 		if (processGetStatus(aux) == 4)
 		{
 			lotter = processGetSchedParams(aux);
 			maximo = lotter->num_tickets + minimo;
-			if (minimo <= ticket_premiado && ticket_premiado < maximo)
+			if (minimo <= ticket_premiado && ticket_premiado <= maximo)
 			{
 				proximo = aux;
 			}
-			minimo += maximo;
+			minimo = maximo;
 		}
+		//As variaveis maximo e minimo setam os limites dos tikets do processo avaliado
 	}
-
     return proximo;
 
 }
@@ -138,14 +137,21 @@ int lottReleaseParams(Process *p) {
 //Retorna o numero de tickets efetivamente transfeirdos (pode ser menos)
 int lottTransferTickets(Process *src, Process *dst, int tickets) {
 
+    //Pega os paramentros do processo src
 	LotterySchedParams *lotter_a;
 	lotter_a = processGetSchedParams(src);
+
+	//Se o número de tickets solicitado for maior do que o quanto o processo src possui
+	//O número de tickets solicitados será o valor total que ele possui
 	if (lotter_a->num_tickets <= tickets)
         tickets = lotter_a->num_tickets;
+    //Subtrai do número de tickets do processo src o número de tickets solicitados
     lotter_a->num_tickets -= tickets;
 
+    //Pega os paramentros do processo dst
     LotterySchedParams *lotter_b;
 	lotter_b = processGetSchedParams(dst);
+    //Soma do número tickets solicitados ao número de tickets do processo dst
 	lotter_b->num_tickets += tickets;
 
 	return tickets;
